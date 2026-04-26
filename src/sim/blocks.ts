@@ -7,7 +7,8 @@ export const BlockId = {
   PLANKS: 5,
   STICK: 6,
   COAL: 7,
-  TORCH: 8
+  TORCH: 8,
+  COAL_ORE: 9
 } as const;
 
 export type BlockId = (typeof BlockId)[keyof typeof BlockId];
@@ -72,6 +73,12 @@ export const BLOCK_REGISTRY = {
     id: BlockId.TORCH,
     name: "Torch",
     solid: false,
+    mineable: true
+  },
+  [BlockId.COAL_ORE]: {
+    id: BlockId.COAL_ORE,
+    name: "Coal Ore",
+    solid: true,
     mineable: true
   }
 } as const satisfies Readonly<Record<BlockId, BlockDefinition>>;

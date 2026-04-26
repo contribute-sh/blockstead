@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { BLOCK_REGISTRY, BlockId, getBlockDefinition } from "../../src/sim/blocks";
 
 describe("block registry", () => {
+  it("keeps existing block ids stable and appends coal ore", () => {
+    expect(BlockId.AIR).toBe(0);
+    expect(BlockId.GRASS).toBe(1);
+    expect(BlockId.DIRT).toBe(2);
+    expect(BlockId.STONE).toBe(3);
+    expect(BlockId.WOOD).toBe(4);
+    expect(BlockId.PLANKS).toBe(5);
+    expect(BlockId.STICK).toBe(6);
+    expect(BlockId.COAL).toBe(7);
+    expect(BlockId.TORCH).toBe(8);
+    expect(BlockId.COAL_ORE).toBe(9);
+  });
+
   it("has a registry entry for every block id", () => {
     const blockIds = Object.values(BlockId);
 
@@ -24,6 +37,11 @@ describe("block registry", () => {
     });
     expect(BLOCK_REGISTRY[BlockId.TORCH]).toMatchObject({
       solid: false,
+      mineable: true
+    });
+    expect(BLOCK_REGISTRY[BlockId.COAL_ORE]).toMatchObject({
+      name: "Coal Ore",
+      solid: true,
       mineable: true
     });
   });

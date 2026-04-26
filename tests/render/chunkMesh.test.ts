@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { buildChunkMesh } from "../../src/render/chunkMesh";
+import { buildChunkMesh, getBlockFaceUV } from "../../src/render/chunkMesh";
 import { BlockId } from "../../src/sim/blocks";
 import { CHUNK_SIZE, createChunk, setBlock } from "../../src/sim/chunk";
 
@@ -23,6 +23,18 @@ describe("buildChunkMesh", () => {
     expect(getFaceCount(geometry)).toBe(6);
     expect(geometry.getIndex()?.count).toBe(36);
     expect(geometry.getAttribute("position").count).toBe(24);
+  });
+
+  it("emits faces and UVs for coal ore", () => {
+    const chunk = createChunk();
+
+    setBlock(chunk, 4, 5, 6, BlockId.COAL_ORE);
+
+    const geometry = buildChunkMesh(chunk);
+
+    expect(getFaceCount(geometry)).toBe(6);
+    expect(getBlockFaceUV(BlockId.COAL_ORE)).toHaveLength(4);
+    expect(geometry.getAttribute("uv").count).toBe(24);
   });
 
   it("omits the internal face between adjacent solid blocks", () => {

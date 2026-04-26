@@ -16,7 +16,8 @@ export const BLOCK_DROPS = {
   [BlockId.PLANKS]: [{ item: BlockId.PLANKS, count: 1 }],
   [BlockId.STICK]: EMPTY_DROPS,
   [BlockId.COAL]: [{ item: BlockId.COAL, count: 1 }],
-  [BlockId.TORCH]: [{ item: BlockId.TORCH, count: 1 }]
+  [BlockId.TORCH]: [{ item: BlockId.TORCH, count: 1 }],
+  [BlockId.COAL_ORE]: [{ item: BlockId.COAL, count: 1 }]
 } as const satisfies Readonly<Record<BlockId, ReadonlyArray<BlockDrop>>>;
 
 export function getBlockDrops(blockId: BlockId): ReadonlyArray<BlockDrop> {

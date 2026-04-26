@@ -32,7 +32,8 @@ describe("block drop registry", () => {
       [BlockId.WOOD, [{ item: BlockId.WOOD, count: 1 }]],
       [BlockId.PLANKS, [{ item: BlockId.PLANKS, count: 1 }]],
       [BlockId.COAL, [{ item: BlockId.COAL, count: 1 }]],
-      [BlockId.TORCH, [{ item: BlockId.TORCH, count: 1 }]]
+      [BlockId.TORCH, [{ item: BlockId.TORCH, count: 1 }]],
+      [BlockId.COAL_ORE, [{ item: BlockId.COAL, count: 1 }]]
     ];
 
     for (const [id, drops] of expectedDrops) {
