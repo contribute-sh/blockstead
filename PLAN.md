@@ -1,96 +1,112 @@
 ## Overview
 
-Build a deterministic terrain generation layer for the voxel world by adding a small seeded value-noise helper and a `generateChunk(seed, chunkX, chunkZ)` API. The generator will fill each fixed-size chunk with air above the terrain surface, grass at the top solid block, a shallow dirt layer below the surface, and stone deeper underground, giving later movement, rendering, mining, placement, and save/load work a stable world source that remains testable without a browser.
+Define the browser-free voxel data layer that later terrain generation, mining, placement, save/load, and rendering code will build on. The implementation should add a typed block registry for the MVP block set and a deterministic fixed-size chunk abstraction backed internally by a `Uint8Array`, with pure coordinate, read, write, and serialization helpers.
+
+This proposal is intentionally limited to data structures. It does not generate terrain, render blocks, add controls, implement inventory, or touch browser entry points. Because the current repository only contains `CONSTITUTION.md`, `PLAN.md`, and `README.md`, this task depends on the scaffold task landing first with `package.json`, TypeScript, pnpm, and Vitest. If the scaffold is still missing when implementation starts, the implementation should stop and report that prerequisite instead of expanding this task into package/config setup.
 
 ## Architecture
 
-- `src/world/generator.ts` is the public terrain generation module. It validates inputs, converts chunk-local coordinates into world-space coordinates, samples deterministic height noise, and fills a new `Chunk` using the existing chunk and block primitives.
-- `src/world/noise.ts` is an internal deterministic helper module. It normalizes a string or numeric seed into a stable 32-bit value, hashes integer lattice coordinates, interpolates lattice values, and exposes a small value-noise function used by the generator. It has no dependency on `Math.random`, timers, browser state, or external packages.
-- Existing `src/world/blocks.ts` remains the source of block IDs for `air`, `grass`, `dirt`, and `stone`. Existing `src/world/chunk.ts` remains the source of chunk dimensions, `Chunk` storage shape, and coordinate/index helpers.
-- `src/world/__tests__/generator.test.ts` covers deterministic byte output and structural terrain invariants through Vitest. The tests inspect chunk bytes directly and do not require Three.js, DOM, Playwright, localStorage, or rendering.
-- Data flow is pure: callers provide a seed and integer chunk coordinates, the generator returns a newly generated chunk, and the function does not mutate external state or cache global results.
+- `src/world/blocks.ts` is the source of truth for block IDs, block names, and small metadata needed by simulation code. It exports a typed registry for `air`, `grass`, `dirt`, `stone`, `wood`, `planks`, `coal`, and a placeholder `torch`.
+- `src/world/chunk.ts` owns chunk dimensions, chunk volume, coordinate validation, deterministic coordinate-to-index math, chunk creation, block reads, block writes, and byte serialization.
+- `Chunk` is an opaque public type, not a structural object with a public mutable `blocks: Uint8Array` field. The implementation may use a non-exported symbol, private class field, or module-private backing store, but consumers should create chunks only through exported helpers.
+- `getBlock` validates coordinates and validates the stored byte before returning it as a `BlockId`. `setBlock` validates coordinates and block IDs before creating the updated chunk.
+- `src/world/__tests__/chunk.test.ts` covers registry validity, coordinate bounds, default-air chunks, set/get round trips, pure writes that do not mutate the input chunk, serialization copying, and rejection of malformed byte input.
+- The modules stay pure and deterministic: no Three.js, DOM, localStorage, timers, random values, filesystem, networking, or process-global mutable state.
 
 ## User experience
 
-Public API from `src/world/generator.ts`:
+Public API from `src/world/blocks.ts`:
 
 ```ts
-import type { Chunk } from "./chunk";
+export const BLOCK_IDS: {
+  readonly air: 0;
+  readonly grass: 1;
+  readonly dirt: 2;
+  readonly stone: 3;
+  readonly wood: 4;
+  readonly planks: 5;
+  readonly coal: 6;
+  readonly torch: 7;
+};
 
-export type TerrainSeed = string | number;
+export type BlockName = keyof typeof BLOCK_IDS;
+export type BlockId = (typeof BLOCK_IDS)[BlockName];
 
-export interface TerrainHeightRange {
-  readonly min: number;
-  readonly max: number;
+export interface BlockDefinition {
+  readonly id: BlockId;
+  readonly name: BlockName;
+  readonly solid: boolean;
+  readonly transparent: boolean;
 }
 
-export interface TerrainGeneratorConfig {
-  readonly seed: TerrainSeed;
-  readonly chunkX: number;
-  readonly chunkZ: number;
-  readonly heightRange: TerrainHeightRange;
-  readonly dirtDepth: number;
+export const BLOCKS: readonly BlockDefinition[];
+export function isBlockId(value: number): value is BlockId;
+export function assertBlockId(value: number): BlockId;
+export function getBlockDefinition(id: BlockId): BlockDefinition;
+```
+
+Public API from `src/world/chunk.ts`:
+
+```ts
+import type { BlockId } from "./blocks";
+
+export const CHUNK_WIDTH = 16;
+export const CHUNK_HEIGHT = 64;
+export const CHUNK_DEPTH = 16;
+export const CHUNK_VOLUME = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
+
+export interface Chunk {
+  // Opaque brand or private implementation detail; no public raw byte field.
 }
 
-export const DEFAULT_TERRAIN_HEIGHT_RANGE: TerrainHeightRange;
-export const DEFAULT_DIRT_DEPTH: number;
-
-export function generateChunk(
-  seed: TerrainSeed,
-  chunkX: number,
-  chunkZ: number,
-): Chunk;
+export function createChunk(fill?: BlockId): Chunk;
+export function createChunkFromBytes(blocks: Uint8Array): Chunk;
+export function chunkIndex(x: number, y: number, z: number): number;
+export function getBlock(chunk: Chunk, x: number, y: number, z: number): BlockId;
+export function setBlock(chunk: Chunk, x: number, y: number, z: number, block: BlockId): Chunk;
+export function chunkToBytes(chunk: Chunk): Uint8Array;
 ```
 
-Internal API from `src/world/noise.ts`:
+Usage snippet: create a default empty chunk and read air from the origin.
 
 ```ts
-export function normalizeSeed(seed: TerrainSeed): number;
-export function valueNoise2D(seed: number, x: number, z: number): number;
+import { BLOCK_IDS } from "./world/blocks";
+import { createChunk, getBlock } from "./world/chunk";
+
+const chunk = createChunk();
+expect(getBlock(chunk, 0, 0, 0)).toBe(BLOCK_IDS.air);
 ```
 
-`src/world/noise.ts` exports are implementation details for the world module and targeted tests only. The stable public surface for consumers is `generateChunk`, `TerrainSeed`, `TerrainHeightRange`, `TerrainGeneratorConfig`, `DEFAULT_TERRAIN_HEIGHT_RANGE`, and `DEFAULT_DIRT_DEPTH`.
-
-Usage snippet: generate the origin chunk for a named world seed.
+Usage snippet: write a block without mutating the original chunk.
 
 ```ts
-import { generateChunk } from "./world/generator";
-import { getBlock } from "./world/chunk";
+import { BLOCK_IDS } from "./world/blocks";
+import { createChunk, getBlock, setBlock } from "./world/chunk";
 
-const chunk = generateChunk("demo-world", 0, 0);
-const blockAtSpawn = getBlock(chunk, 8, 32, 8);
+const original = createChunk();
+const updated = setBlock(original, 1, 2, 3, BLOCK_IDS.stone);
+
+expect(getBlock(original, 1, 2, 3)).toBe(BLOCK_IDS.air);
+expect(getBlock(updated, 1, 2, 3)).toBe(BLOCK_IDS.stone);
 ```
 
-Usage snippet: generate neighboring chunks from the same seed.
+Usage snippet: serialize bytes for deterministic fixtures without exposing mutable storage.
 
 ```ts
-import { generateChunk } from "./world/generator";
+import { createChunk, chunkToBytes } from "./world/chunk";
 
-const seed = 12345;
-const center = generateChunk(seed, 0, 0);
-const east = generateChunk(seed, 1, 0);
-const north = generateChunk(seed, 0, -1);
-```
-
-Usage snippet: compare generated chunk bytes for deterministic regression tests.
-
-```ts
-import { generateChunk } from "./world/generator";
-
-const first = generateChunk("fixture-seed", -2, 3);
-const second = generateChunk("fixture-seed", -2, 3);
-
-expect(Array.from(second.blocks)).toEqual(Array.from(first.blocks));
+const bytes = chunkToBytes(createChunk());
+expect(bytes).toHaveLength(16 * 64 * 16);
 ```
 
 Error handling and result shapes:
 
-- Successful generation returns a new `Chunk` whose `blocks` storage contains only known block IDs.
-- `generateChunk` throws `TypeError` when `seed` is not a finite number or non-empty string.
-- `generateChunk` throws `RangeError` when `chunkX` or `chunkZ` is not a finite integer.
-- The default generator has no recoverable error result type because it performs no I/O and has no async work.
-- The module has no filesystem, network, DOM, localStorage, global random, timer, rendering, or process side effects.
-- The generated world is deterministic for a fixed implementation version, seed, and chunk coordinate. Changing terrain constants or noise math should be treated as a deliberate fixture-affecting change.
+- Successful reads return a validated `BlockId`.
+- `createChunkFromBytes` rejects arrays with the wrong length or any unknown block byte, and copies accepted input before storing it.
+- `chunkToBytes` returns a defensive copy; mutating the returned `Uint8Array` cannot mutate the chunk.
+- `getBlock` validates the stored byte before returning. If internal storage is ever malformed, it throws instead of widening an invalid byte to `BlockId`.
+- Coordinate helpers throw `RangeError` for fractional, negative, or out-of-range `x`, `y`, or `z` coordinates.
+- Block validation throws `RangeError` for numeric IDs that are not in the registry.
 
 ## File tree
 
@@ -98,63 +114,74 @@ Error handling and result shapes:
 PLAN.md
 src/
   world/
-    generator.ts
-    noise.ts
+    blocks.ts
+    chunk.ts
     __tests__/
-      generator.test.ts
+      chunk.test.ts
 ```
 
-This planning task only modifies `PLAN.md`. The later implementation should create the world files above and use existing block/chunk modules without changing application entry points, renderer code, package scripts, or configuration unless an existing public export barrel must be updated.
+This planning task only modifies `PLAN.md`. The later implementation should create the `src/world` files above only after the TypeScript/Vitest scaffold exists. It should not change renderer code, app-entry code, package scripts, package metadata, lockfiles, or configuration as part of this data-layer task.
 
 ## Dependencies
 
+- Explicit prerequisite: the scaffold task must already provide `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, Vitest, and a working `pnpm test` script. In the current checkout that prerequisite is not yet satisfied, so execution of this data-layer implementation is blocked until scaffold exists.
 - No new runtime dependencies.
-- No external noise package; implement a small deterministic hashed value-noise helper in TypeScript.
-- Use existing project primitives: `Uint8Array` chunk storage, TypeScript types, and standard `TypeError`/`RangeError`.
-- Use the constitution stack exactly: package manager `pnpm`, unit tests through Vitest via `pnpm test`, lint through `pnpm eslint .`, typecheck through `pnpm tsc --noEmit`, and build through `pnpm build`.
-- Playwright and Three.js are not needed for this generator task because the behavior is headlessly testable.
+- No external voxel, ECS, serialization, or validation package.
+- Use TypeScript, `Uint8Array`, standard `RangeError`, and the project test stack once scaffolded.
+- Follow the constitution stack once available: package manager `pnpm`, unit tests through Vitest via `pnpm test`, lint through `pnpm eslint .`, typecheck through `pnpm tsc --noEmit`, and build through `pnpm build`.
+- Playwright and Three.js are not needed for this task because the behavior is headlessly testable.
 
 ## Data model
 
-- `TerrainSeed` accepts a finite number or non-empty string. Strings are normalized with a stable 32-bit hash; numbers are normalized into a deterministic 32-bit integer without using platform-dependent randomness.
-- Chunk coordinates are signed integers. Local chunk coordinates are converted to world-space with `worldX = chunkX * CHUNK_WIDTH + localX` and `worldZ = chunkZ * CHUNK_DEPTH + localZ`.
-- The terrain heightmap is one height value per `(worldX, worldZ)` column. Noise output is normalized to `[0, 1]`, scaled into `DEFAULT_TERRAIN_HEIGHT_RANGE`, and clamped to valid chunk `y` coordinates.
-- `DEFAULT_TERRAIN_HEIGHT_RANGE` should keep terrain inside the chunk, with air above the surface and enough vertical room for stone below. Exact min/max values should be constants in `generator.ts`, not magic numbers spread through tests.
-- `DEFAULT_DIRT_DEPTH` defines the number of dirt blocks below grass before stone begins.
-- For each `(x, z)` column:
-  - `y > surfaceHeight` is `air`.
-  - `y === surfaceHeight` is `grass`.
-  - `surfaceHeight - DEFAULT_DIRT_DEPTH <= y < surfaceHeight` is `dirt`, clamped at the bottom of the chunk.
-  - `0 <= y < surfaceHeight - DEFAULT_DIRT_DEPTH` is `stone`.
-- Generated chunks contain only `BLOCK_IDS.air`, `BLOCK_IDS.grass`, `BLOCK_IDS.dirt`, and `BLOCK_IDS.stone`.
+- Block IDs are small unsigned integer literals. The initial registry reserves:
+  - `air = 0`
+  - `grass = 1`
+  - `dirt = 2`
+  - `stone = 3`
+  - `wood = 4`
+  - `planks = 5`
+  - `coal = 6`
+  - `torch = 7`
+- `air` is non-solid and transparent. `grass`, `dirt`, `stone`, `wood`, `planks`, and `coal` are solid and opaque. `torch` is a non-solid transparent placeholder so crafting and placement code can reference it later without requiring lighting behavior in this task.
+- A chunk is exactly `16 x 64 x 16` blocks with `CHUNK_VOLUME = 16_384`.
+- Chunk bytes use `Uint8Array` internally for compact deterministic storage, but raw mutable storage is not part of the public `Chunk` result shape.
+- The deterministic index formula is `index = y * CHUNK_WIDTH * CHUNK_DEPTH + z * CHUNK_WIDTH + x`.
+- `createChunk()` fills every cell with `BLOCK_IDS.air`. `createChunk(fill)` fills every cell with a validated block ID.
+- `setBlock` is pure: it copies the chunk bytes, writes the validated block ID at the validated index, and returns a new `Chunk`.
+- `createChunkFromBytes` is the only public way to construct a chunk from bytes. It requires exact chunk volume, validates every byte as a known `BlockId`, and stores a copy.
+- `chunkToBytes` returns a copy for tests, save/load, and deterministic fixtures. Consumers that need mutation must call `setBlock`.
 
 ## Implementation phases
 
-1. Confirm the existing block and chunk modules expose the needed block IDs, chunk dimensions, chunk creation, and block storage helpers. If they do not, stop and document the missing prerequisite rather than expanding this terrain task into unrelated data-structure work.
-2. Add `src/world/noise.ts` with deterministic seed normalization, integer coordinate hashing, smooth interpolation, and a small 2D value-noise sampler. Keep the module pure and dependency-free.
-3. Add `src/world/generator.ts` with public terrain constants, input validation, world-coordinate conversion, height sampling, and chunk filling for grass, dirt, stone, and air.
-4. Prefer direct chunk byte writes during generation if the existing chunk API supports safe construction; otherwise use the existing set/get helpers while keeping the returned chunk shape identical to other world code.
-5. Add `src/world/__tests__/generator.test.ts` for same seed/coords determinism, different coordinate coverage, valid block IDs only, top solid block is grass for every column, air exists above surface where height permits, and no dirt appears above a column's grass block.
-6. Run `pnpm test` for the unit suite. If the scaffold is present, also run `pnpm tsc --noEmit` because the task adds exported TypeScript API.
-7. Keep renderer, controls, inventory, crafting, save/load, package metadata, lockfiles, and browser tests unchanged for this generator-only implementation.
+1. Confirm the scaffold exists before implementation: `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, Vitest, and `pnpm test` must be present. If any are missing, stop and document that this proposal depends on the scaffold task rather than adding package/config files here.
+2. Add `src/world/blocks.ts` with `BLOCK_IDS`, `BlockName`, `BlockId`, `BlockDefinition`, `BLOCKS`, `isBlockId`, `assertBlockId`, and `getBlockDefinition`.
+3. Add `src/world/chunk.ts` with chunk constants, an opaque `Chunk` representation, coordinate validation, `chunkIndex`, `createChunk`, `createChunkFromBytes`, `getBlock`, `setBlock`, and `chunkToBytes`.
+4. Ensure no API exposes mutable backing storage. Use defensive copies at all byte boundaries and validate stored bytes before returning `BlockId`.
+5. Add `src/world/__tests__/chunk.test.ts` for registry IDs, block metadata lookups, bounds errors, default-air chunks, fill chunks, set/get round trips, pure writes, serialization copies, malformed byte length rejection, and unknown block byte rejection.
+6. Run `pnpm test` for the unit suite. If scaffold scripts exist, also run `pnpm tsc --noEmit` because the task adds exported TypeScript API.
+7. Keep terrain generation, renderer, controls, inventory, crafting, save/load, package metadata, lockfiles, and browser tests unchanged for this data-layer implementation.
 
 ## Acceptance criteria
 
-- `src/world/generator.ts` exports the documented `generateChunk(seed, chunkX, chunkZ)` API and terrain constants.
-- `src/world/noise.ts` implements deterministic value noise without external dependencies, `Math.random`, global mutable seed state, timers, browser APIs, or I/O.
-- Calling `generateChunk` twice with the same seed and chunk coordinates returns chunks with identical byte arrays.
-- Generated chunks contain only air, grass, dirt, and stone block IDs.
-- Every `(x, z)` column has grass as its top solid block.
-- No dirt block appears above the grass block in any generated column.
-- Air fills all cells above the surface height.
-- Dirt forms a shallow layer under grass and stone fills deeper terrain.
-- Invalid seed or non-integer chunk coordinate inputs throw the documented standard errors.
-- Unit tests for generator determinism and invariants pass with `pnpm test`.
-- The implementation does not couple simulation code to Three.js, DOM, localStorage, Playwright, filesystem APIs, networking APIs, or visual polish.
+- The implementation starts only after the TypeScript/Vitest scaffold exists, or else reports the missing scaffold prerequisite without modifying package/config files.
+- `src/world/blocks.ts` exports the documented block registry, types, and validation helpers for air, grass, dirt, stone, wood, planks, coal, and torch.
+- `src/world/chunk.ts` exports the documented chunk constants and helper API for a `16 x 64 x 16` chunk.
+- `Chunk` does not expose public mutable raw storage. Consumers cannot construct valid chunks from arbitrary bytes without going through validation helpers.
+- `getBlock` returns only validated `BlockId` values and throws if coordinates or stored bytes are invalid.
+- `setBlock` validates block IDs and coordinates, returns a new chunk, and does not mutate its input chunk.
+- `createChunkFromBytes` validates exact length and every stored block ID, and stores a defensive copy.
+- `chunkToBytes` returns a defensive copy suitable for tests and future save/load work.
+- Unit tests for registry behavior, chunk bounds, default-air state, set/get round trips, immutable writes, and invalid byte input pass with `pnpm test` once scaffolded.
+- The implementation does not couple simulation code to Three.js, DOM, localStorage, Playwright, filesystem APIs, networking APIs, visual polish, or terrain generation.
 
 ## Open questions
 
-- Do the current chunk primitives expose a mutating construction path for efficient generation, or should this task initially use immutable `setBlock` helpers despite the extra copying?
-- Should `src/world/noise.ts` be tested directly, or should noise behavior remain covered only through generator determinism tests?
-- Should `generateChunk` be re-exported from an existing `src/world/index.ts` or package entry point if one exists?
-- What exact default terrain height range best matches the eventual player spawn and movement collision work?
+- Should later terrain generation use `setBlock` for purity or an additional internal chunk builder API for efficient bulk writes?
+- Should `torch` remain only a placeholder block in this registry until lighting/rendering work exists, or should it include extra metadata in a later task?
+- Should `src/world/blocks.ts` and `src/world/chunk.ts` be re-exported from a future `src/world/index.ts` or package entry point after the scaffold is in place?
+- Should future save/load use `chunkToBytes` directly or wrap it in a versioned world serialization format?
+
+## Revision notes for round 1
+
+- Addressed issue comment `4321282544` by making the missing scaffold an explicit prerequisite in the overview, dependencies, implementation phases, and acceptance criteria. The plan now says to stop if `package.json`, TypeScript, pnpm, and Vitest are not present instead of changing package/config files inside this data-layer task.
+- Addressed issue comment `4321282795` by removing the public `blocks: Uint8Array` result shape from `Chunk`. The revised plan requires an opaque chunk representation, defensive copies for byte import/export, validated construction through `createChunkFromBytes`, and stored-byte validation inside `getBlock` before returning `BlockId`.
