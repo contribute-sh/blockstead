@@ -34,7 +34,8 @@ const BLOCK_FACE_UVS = {
   [BlockId.PLANKS]: DEFAULT_FACE_UV,
   [BlockId.STICK]: DEFAULT_FACE_UV,
   [BlockId.COAL]: DEFAULT_FACE_UV,
-  [BlockId.TORCH]: DEFAULT_FACE_UV
+  [BlockId.TORCH]: DEFAULT_FACE_UV,
+  [BlockId.COAL_ORE]: DEFAULT_FACE_UV
 } as const satisfies Readonly<Record<BlockId, BlockFaceUV>>;
 
 const FACE_DEFINITIONS: readonly FaceDefinition[] = [
