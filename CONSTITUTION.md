@@ -42,7 +42,20 @@ The MVP should be small but real: a deterministic seeded voxel world, first-pers
 - Contributors must keep modules focused: simulation, rendering, controls, inventory, crafting, persistence, and UI should be separable.
 
 ## Verification
-- MVP verification: seeded world loads, player can move, mine one block, place one block, craft one item, and save/reload locally.
+- type: web
+- build: pnpm build
+- serve: pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort
+- url: http://127.0.0.1:4173
+- ready_signal: Local:
+- runtime:
+  - pnpm exec playwright test tests/e2e/mvp.spec.ts
+- acceptance:
+  - Seeded world loads without console/runtime errors.
+  - Player can move with keyboard input.
+  - Player can mine one block and see inventory update.
+  - Player can place one block and see world status update.
+  - Player can craft planks from wood.
+  - Player can save, reload, and observe persisted inventory/state.
 - Harden verification: unit tests and at least one Playwright happy path pass reliably in a clean install.
 - Human gate: after hardening drains, a human should play the browser build for at least five minutes and confirm the loop is understandable.
 

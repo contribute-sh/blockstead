@@ -1,4 +1,4 @@
-export type SaveStatusState = "idle" | "saving" | "saved" | "error";
+export type SaveStatusState = "idle" | "saving" | "saved" | "loaded" | "error";
 
 export interface SaveStatusIndicator {
   element: HTMLElement;
@@ -9,6 +9,7 @@ const statusLabels: Record<SaveStatusState, string> = {
   idle: "Idle",
   saving: "Saving...",
   saved: "Saved",
+  loaded: "Loaded",
   error: "Error"
 };
 
