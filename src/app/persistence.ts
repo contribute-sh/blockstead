@@ -2,7 +2,7 @@ import type { SaveStatusIndicator } from "../hud/saveStatus";
 import { selectHotbarSlot } from "../sim/inventory";
 import { SAVE_VERSION, type SaveState } from "../sim/save";
 import { loadFromStorage, saveToStorage } from "../sim/saveStorage";
-import type { Simulation } from "../sim/simulation";
+import { restoreWorldMutations, type Simulation } from "../sim/simulation";
 
 const SAVE_KEY = "blockstead:mvp-save";
 
@@ -24,6 +24,8 @@ export function restoreSavedGame(simulation: Simulation, storage: Storage | null
   if (!loaded.ok) {
     return false;
   }
+
+  restoreWorldMutations(simulation, loaded.state.mutations);
 
   const selectedHotbarSlot = Math.trunc(loaded.state.hotbar.selected);
 
@@ -77,7 +79,12 @@ function snapshotGame(simulation: Simulation): SaveState {
   return {
     version: SAVE_VERSION,
     seed: simulation.seed,
-    mutations: [],
+    mutations: simulation.mutations.map((mutation) => ({
+      x: mutation.x,
+      y: mutation.y,
+      z: mutation.z,
+      block: mutation.block
+    })),
     player: {
       position: [
         simulation.player.position[0],

@@ -3,13 +3,15 @@ import { BlockId, getBlockDefinition } from "./blocks";
 import { CHUNK_SIZE } from "./chunk";
 import { addItem, createInventory, selectHotbarSlot, type Inventory, type InventorySlot } from "./inventory";
 import { applyIntent, createPlayer, type Player, type PlayerIntent, type Vec3 } from "./player";
+import type { SaveMutation } from "./save";
 import { generateChunk } from "./terrain";
 import { createWorld, getBlock, setBlock, type ChunkKey, type World } from "./world";
 
 const PLAYER_HALF_WIDTH = 0.3;
 const PLAYER_HEIGHT = 1.8;
 const PLAYER_EYE_HEIGHT = 1.62;
-const SPAWN_Y = 12;
+const SPAWN_SCAN_Y = 12;
+const INITIAL_PITCH = -1.05;
 const REACH_DISTANCE = 5;
 const COLLISION_STEP = 0.25;
 const EPSILON = 0.0001;
@@ -32,6 +34,7 @@ interface RayHit {
 export interface Simulation {
   readonly seed: number;
   world: World;
+  mutations: Array<SaveMutation>;
   player: Player;
   inventory: Inventory;
   selectedHotbarSlot: number;
@@ -42,6 +45,7 @@ export function createSimulation({ seed }: { readonly seed: number }): Simulatio
   const simulation: Simulation = {
     seed,
     world: createWorld(),
+    mutations: [],
     player: createPlayer(),
     inventory: createInventory(),
     selectedHotbarSlot: 0,
@@ -50,10 +54,27 @@ export function createSimulation({ seed }: { readonly seed: number }): Simulatio
     }
   };
 
-  simulation.player.position = [0.5, SPAWN_Y, 0.5];
+  simulation.player.position = [0.5, SPAWN_SCAN_Y, 0.5];
+  simulation.player.pitch = INITIAL_PITCH;
+  ensureChunksForPlayer(simulation);
+  simulation.player.position = [
+    simulation.player.position[0],
+    highestSolidY(simulation, 0, 0) + 2,
+    simulation.player.position[2]
+  ];
   ensureChunksForPlayer(simulation);
 
   return simulation;
+}
+
+function highestSolidY(simulation: Simulation, x: number, z: number): number {
+  for (let y = CHUNK_SIZE - 1; y >= 0; y -= 1) {
+    if (getBlock(simulation.world, x, y, z) !== BlockId.AIR) {
+      return y;
+    }
+  }
+
+  return 0;
 }
 
 function stepSimulation(simulation: Simulation, intents: Readonly<IntentFrame>, dt: number): void {
@@ -130,7 +151,7 @@ function mineTarget(simulation: Simulation): void {
     return;
   }
 
-  setBlock(simulation.world, hit.x, hit.y, hit.z, BlockId.AIR);
+  writeBlock(simulation, hit.x, hit.y, hit.z, BlockId.AIR);
   simulation.inventory = addItem(simulation.inventory, hit.block, 1).inventory;
 }
 
@@ -153,8 +174,54 @@ function placeTarget(simulation: Simulation): void {
     return;
   }
 
-  setBlock(simulation.world, target.x, target.y, target.z, slot.id);
+  writeBlock(simulation, target.x, target.y, target.z, slot.id);
   simulation.inventory = consumeSelectedSlot(simulation.inventory, simulation.selectedHotbarSlot);
+}
+
+export function restoreWorldMutations(
+  simulation: Simulation,
+  mutations: ReadonlyArray<SaveMutation>
+): void {
+  simulation.mutations = [];
+
+  for (const mutation of mutations) {
+    ensureChunkAtVoxel(simulation, mutation.x, mutation.y, mutation.z);
+    setBlock(simulation.world, mutation.x, mutation.y, mutation.z, mutation.block);
+    recordMutation(simulation, mutation);
+  }
+}
+
+function writeBlock(
+  simulation: Simulation,
+  x: number,
+  y: number,
+  z: number,
+  block: BlockId
+): void {
+  setBlock(simulation.world, x, y, z, block);
+  recordMutation(simulation, { x, y, z, block });
+}
+
+function recordMutation(simulation: Simulation, mutation: SaveMutation): void {
+  const existingIndex = simulation.mutations.findIndex(
+    (entry) => entry.x === mutation.x && entry.y === mutation.y && entry.z === mutation.z
+  );
+
+  const nextMutation = {
+    x: mutation.x,
+    y: mutation.y,
+    z: mutation.z,
+    block: mutation.block
+  };
+
+  if (existingIndex === -1) {
+    simulation.mutations = [...simulation.mutations, nextMutation];
+    return;
+  }
+
+  simulation.mutations = simulation.mutations.map((entry, index) =>
+    index === existingIndex ? nextMutation : entry
+  );
 }
 
 function isPlaceable(id: BlockId): boolean {

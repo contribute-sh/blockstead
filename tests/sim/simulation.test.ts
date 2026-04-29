@@ -43,6 +43,9 @@ describe("simulation aggregate", () => {
 
     expect(getBlock(simulation.world, target.x, target.y, target.z)).toBe(BlockId.AIR);
     expect(simulation.inventory.slots[0]).toEqual({ id: BlockId.STONE, count: 1 });
+    expect(simulation.mutations).toEqual([
+      { x: target.x, y: target.y, z: target.z, block: BlockId.AIR }
+    ]);
   });
 
   it("places a selected hotbar block into targeted air and consumes one item", () => {
@@ -59,5 +62,8 @@ describe("simulation aggregate", () => {
 
     expect(getBlock(simulation.world, target.x, target.y, target.z)).toBe(BlockId.DIRT);
     expect(simulation.inventory.slots[0]).toEqual({ id: BlockId.DIRT, count: 1 });
+    expect(simulation.mutations).toEqual([
+      { x: target.x, y: target.y, z: target.z, block: BlockId.DIRT }
+    ]);
   });
 });
