@@ -1,18 +1,25 @@
 import { defineConfig } from "@playwright/test";
 
-const port = 5173;
-const baseURL = `http://127.0.0.1:${port}`;
+const configuredBaseURL =
+  process.env.CONTRIBUTE_VERIFY_URL ??
+  process.env.PLAYWRIGHT_BASE_URL ??
+  process.env.BASE_URL;
+const port = Number(process.env.BLOCKSTEAD_E2E_PORT ?? 5177);
+const baseURL = configuredBaseURL ?? `http://127.0.0.1:${port}`;
+const webServer = configuredBaseURL
+  ? undefined
+  : {
+      command: `pnpm exec vite --host 127.0.0.1 --port ${port} --strictPort`,
+      url: baseURL,
+      reuseExistingServer: false
+    };
 
 export default defineConfig({
   testDir: "tests/e2e",
   use: {
     baseURL
   },
-  webServer: {
-    command: "pnpm dev -- --host 127.0.0.1",
-    url: baseURL,
-    reuseExistingServer: !process.env.CI
-  },
+  ...(webServer === undefined ? {} : { webServer }),
   projects: [
     {
       name: "chromium",

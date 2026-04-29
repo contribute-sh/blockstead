@@ -6,6 +6,7 @@ const transitions: Array<[SaveStatusState, string]> = [
   ["idle", "Idle"],
   ["saving", "Saving..."],
   ["saved", "Saved"],
+  ["loaded", "Loaded"],
   ["error", "Error"]
 ];
 

@@ -8,7 +8,7 @@ if (mount === null) {
 
 const app = createApp();
 
-mount.appendChild(app.renderer.domElement);
+mount.appendChild(app.element);
 
 let lastFrameTime = performance.now();
 

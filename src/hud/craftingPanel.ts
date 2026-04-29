@@ -39,29 +39,47 @@ function hasInputs(totals: ReadonlyMap<BlockId, number>, inputs: ReadonlyArray<R
 export function createCraftingPanel(): CraftingPanel {
   const element = document.createElement("div");
   const listeners = new Set<CraftIntentListener>();
+  const rows = new Map<CraftingRecipeId, HTMLElement>();
   let totals: ReadonlyMap<BlockId, number> = new Map<BlockId, number>();
 
   element.dataset.testid = "crafting-panel";
 
   function createRecipeRow(recipeId: CraftingRecipeId): HTMLElement {
-    const recipe = RECIPES[recipeId];
     const row = document.createElement("div");
 
-    row.dataset.recipeId = recipeId;
-    row.dataset.craftable = String(hasInputs(totals, recipe.inputs));
-    row.dataset.requiredInputs = serializeRequiredInputs(recipe.inputs);
-    row.textContent = recipe.id;
     row.addEventListener("click", () => {
       for (const listener of listeners) {
         listener(recipeId);
       }
     });
 
+    updateRecipeRow(row, recipeId);
+
     return row;
   }
 
+  function updateRecipeRow(row: HTMLElement, recipeId: CraftingRecipeId): void {
+    const recipe = RECIPES[recipeId];
+
+    row.dataset.recipeId = recipeId;
+    row.dataset.testid = `craft-recipe-${recipeId}`;
+    row.dataset.craftable = String(hasInputs(totals, recipe.inputs));
+    row.dataset.requiredInputs = serializeRequiredInputs(recipe.inputs);
+    row.textContent = recipe.id;
+  }
+
   function render(): void {
-    element.replaceChildren(...RECIPE_IDS.map((recipeId) => createRecipeRow(recipeId)));
+    for (const recipeId of RECIPE_IDS) {
+      let row = rows.get(recipeId);
+
+      if (row === undefined) {
+        row = createRecipeRow(recipeId);
+        rows.set(recipeId, row);
+        element.append(row);
+      } else {
+        updateRecipeRow(row, recipeId);
+      }
+    }
   }
 
   render();
