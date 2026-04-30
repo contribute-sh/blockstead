@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createApp, seedStarterInventory, type AppRenderer } from "../../src/app";
 import { restoreSavedGame, saveGame } from "../../src/app/persistence";
 import { BlockId } from "../../src/sim/blocks";
 import { SAVE_VERSION, serializeSave, type SaveState } from "../../src/sim/save";
@@ -8,6 +9,19 @@ import { getBlock } from "../../src/sim/world";
 import type { SaveStatusIndicator, SaveStatusState } from "../../src/hud/saveStatus";
 
 const SAVE_KEY = "blockstead:mvp-save";
+const UNAPPLIED_MUTATION = { x: 2, y: 15, z: 2, block: BlockId.PLANKS } as const;
+
+type Simulation = ReturnType<typeof createSimulation>;
+
+interface SimulationSnapshot {
+  readonly position: Simulation["player"]["position"];
+  readonly yaw: number;
+  readonly pitch: number;
+  readonly selectedHotbarSlot: number;
+  readonly inventory: Simulation["inventory"];
+  readonly mutations: Simulation["mutations"];
+  readonly worldProbeBlock: BlockId;
+}
 
 class MemoryStorage implements Storage {
   [name: string]: unknown;
@@ -53,6 +67,24 @@ function createSaveStatus(): SaveStatusIndicator & {
   };
 }
 
+function createTestRenderer(): AppRenderer {
+  return {
+    domElement: document.createElement("canvas"),
+    render() {},
+    setSize() {}
+  };
+}
+
+function getByTestId(root: ParentNode, testId: string): HTMLElement {
+  const element = root.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+
+  if (element === null) {
+    throw new Error(`Missing element with test id "${testId}".`);
+  }
+
+  return element;
+}
+
 function makeSaveState(overrides: Partial<SaveState> = {}): SaveState {
   return {
     version: SAVE_VERSION,
@@ -79,6 +111,57 @@ function makeSaveState(overrides: Partial<SaveState> = {}): SaveState {
     },
     ...overrides
   };
+}
+
+function snapshotSimulation(simulation: Simulation): SimulationSnapshot {
+  return {
+    position: [...simulation.player.position],
+    yaw: simulation.player.yaw,
+    pitch: simulation.player.pitch,
+    selectedHotbarSlot: simulation.selectedHotbarSlot,
+    inventory: {
+      slots: simulation.inventory.slots.map((slot) =>
+        slot === null ? null : { id: slot.id, count: slot.count }
+      ),
+      selectedHotbarSlot: simulation.inventory.selectedHotbarSlot
+    },
+    mutations: simulation.mutations.map((mutation) => ({ ...mutation })),
+    worldProbeBlock: getBlock(
+      simulation.world,
+      UNAPPLIED_MUTATION.x,
+      UNAPPLIED_MUTATION.y,
+      UNAPPLIED_MUTATION.z
+    )
+  };
+}
+
+function expectSimulationToMatchSnapshot(
+  simulation: Simulation,
+  snapshot: SimulationSnapshot
+): void {
+  expect(simulation.player.position).toEqual(snapshot.position);
+  expect(simulation.player.yaw).toBe(snapshot.yaw);
+  expect(simulation.player.pitch).toBe(snapshot.pitch);
+  expect(simulation.selectedHotbarSlot).toBe(snapshot.selectedHotbarSlot);
+  expect(simulation.inventory).toEqual(snapshot.inventory);
+  expect(simulation.mutations).toEqual(snapshot.mutations);
+  expect(
+    getBlock(
+      simulation.world,
+      UNAPPLIED_MUTATION.x,
+      UNAPPLIED_MUTATION.y,
+      UNAPPLIED_MUTATION.z
+    )
+  ).toBe(snapshot.worldProbeBlock);
+}
+
+function expectStarterInventory(simulation: Simulation): void {
+  expect(simulation.inventory.slots.filter((slot) => slot !== null)).toEqual([
+    { id: BlockId.WOOD, count: 2 },
+    { id: BlockId.DIRT, count: 6 }
+  ]);
+  expect(simulation.inventory.selectedHotbarSlot).toBe(0);
+  expect(simulation.selectedHotbarSlot).toBe(0);
 }
 
 describe("app persistence", () => {
@@ -128,5 +211,88 @@ describe("app persistence", () => {
     const parsed = JSON.parse(raw ?? "{}") as SaveState;
     expect(parsed.mutations).toEqual(saved.mutations);
     expect(status.states.at(-1)).toEqual({ state: "saved", detail: "local save" });
+  });
+
+  describe("restoreSavedGame invalid save payloads", () => {
+    const invalidPayloads = [
+      { name: "a non-JSON string", payload: "not-json" },
+      { name: "a JSON array", payload: "[]" },
+      { name: "a JSON number", payload: "42" },
+      {
+        name: "an object missing required top-level fields",
+        payload: JSON.stringify({ version: SAVE_VERSION, seed: 1337 })
+      },
+      {
+        name: "an object missing nested player fields",
+        payload: JSON.stringify({
+          ...makeSaveState({ mutations: [UNAPPLIED_MUTATION] }),
+          player: { position: [0.5, 12, 0.5] }
+        })
+      },
+      {
+        name: "an object missing nested inventory fields",
+        payload: JSON.stringify({
+          ...makeSaveState({ mutations: [UNAPPLIED_MUTATION] }),
+          inventory: { slots: [{ block: BlockId.WOOD }] }
+        })
+      },
+      {
+        name: "an object missing nested mutation fields",
+        payload: JSON.stringify({
+          ...makeSaveState({ mutations: [UNAPPLIED_MUTATION] }),
+          mutations: [
+            {
+              x: UNAPPLIED_MUTATION.x,
+              y: UNAPPLIED_MUTATION.y,
+              z: UNAPPLIED_MUTATION.z
+            }
+          ]
+        })
+      },
+      {
+        name: "a future-version sentinel",
+        payload: serializeSave(
+          makeSaveState({
+            version: SAVE_VERSION + 1,
+            mutations: [UNAPPLIED_MUTATION]
+          })
+        )
+      }
+    ] satisfies ReadonlyArray<{ readonly name: string; readonly payload: string }>;
+
+    it.each(invalidPayloads)("rejects $name without touching a fresh game", ({ payload }) => {
+      const storage = new MemoryStorage();
+      const simulation = createSimulation({ seed: 1337 });
+      const snapshot = snapshotSimulation(simulation);
+      let restored = true;
+
+      storage.setItem(SAVE_KEY, payload);
+
+      expect(() => {
+        restored = restoreSavedGame(simulation, storage);
+      }).not.toThrow();
+      expect(restored).toBe(false);
+      expectSimulationToMatchSnapshot(simulation, snapshot);
+
+      seedStarterInventory(simulation);
+      expectStarterInventory(simulation);
+
+      const appStorage = new MemoryStorage();
+      appStorage.setItem(SAVE_KEY, payload);
+      const app = createApp({
+        rendererFactory: createTestRenderer,
+        getLocalStorage: () => appStorage
+      });
+
+      try {
+        expect(getByTestId(app.element, "hud-world-status").textContent).toBe("Ready");
+        expect(getByTestId(app.element, "hud-world-status").textContent).not.toBe(
+          "Loaded saved world"
+        );
+        expectStarterInventory(app.simulation);
+      } finally {
+        app.dispose();
+      }
+    });
   });
 });
