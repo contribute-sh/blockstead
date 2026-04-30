@@ -56,12 +56,105 @@ describe("save codec", () => {
     });
   });
 
+  it("returns the full version_mismatch error shape for unsupported versions", () => {
+    const version = SAVE_VERSION + 10;
+    const result = deserializeSave(JSON.stringify({ ...baseState, version }));
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "version_mismatch",
+        message: `Unsupported save version ${version}; expected ${SAVE_VERSION}.`,
+        expected: SAVE_VERSION,
+        actual: version
+      }
+    });
+  });
+
   it("returns invalid_json for malformed JSON", () => {
     const result = deserializeSave("{not json");
 
     expect(result).toMatchObject({
       ok: false,
       error: { kind: "invalid_json" }
+    });
+  });
+
+  it("returns the full invalid_json error shape for malformed JSON", () => {
+    expect(deserializeSave("{not json")).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_json",
+        message: "Save data is not valid JSON."
+      }
+    });
+  });
+
+  it.each(["seed", "mutations", "player", "inventory", "hotbar"])(
+    "returns invalid_shape when %s is missing",
+    (field) => {
+      const payload: Record<string, unknown> = { ...baseState };
+
+      delete payload[field];
+
+      expect(deserializeSave(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: {
+          kind: "invalid_shape",
+          message: "Save data does not match the expected save schema."
+        }
+      });
+    }
+  );
+
+  it.each([
+    [
+      "mutations is not an array",
+      {
+        ...baseState,
+        mutations: { x: 1, y: 2, z: 3, block: BlockId.DIRT }
+      }
+    ],
+    [
+      "player.position is not a numeric 3-tuple",
+      {
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [1, 2, "3"]
+        }
+      }
+    ],
+    [
+      "inventory.slots contains a wrong-typed count",
+      {
+        ...baseState,
+        inventory: {
+          slots: [{ block: BlockId.GRASS, count: "12" }]
+        }
+      }
+    ]
+  ])("returns invalid_shape when %s", (_label, payload) => {
+    expect(deserializeSave(JSON.stringify(payload))).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_shape",
+        message: "Save data does not match the expected save schema."
+      }
+    });
+  });
+
+  it("preserves numeric inventory slot counts even when negative", () => {
+    const payload = {
+      ...baseState,
+      inventory: {
+        slots: [{ block: BlockId.GRASS, count: -1 }]
+      }
+    };
+
+    expect(deserializeSave(JSON.stringify(payload))).toEqual({
+      ok: true,
+      state: payload
     });
   });
 
