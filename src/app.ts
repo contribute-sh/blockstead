@@ -38,6 +38,7 @@ export type RendererFactory = (canvas?: HTMLCanvasElement) => AppRenderer;
 export interface CreateAppOptions {
   readonly canvas?: HTMLCanvasElement;
   readonly rendererFactory?: RendererFactory;
+  readonly getLocalStorage?: () => Storage | null;
 }
 
 const CAMERA_EYE_HEIGHT = 1.62;
@@ -54,7 +55,7 @@ export function createApp(options: CreateAppOptions = {}): App {
   const camera = createPlayerCamera();
   const renderer = (options.rendererFactory ?? createRenderer)(options.canvas);
   const simulation = createSimulation({ seed: 1337 });
-  const storage = getLocalStorage();
+  const storage = (options.getLocalStorage ?? getLocalStorage)();
   const loaded = restoreSavedGame(simulation, storage);
   const worldRenderer = createWorldRenderer(scene, simulation.world);
   const hotbar = createHotbar(9);
@@ -158,7 +159,7 @@ function selectedHotbar(hotbar: Hotbar, simulation: Simulation): Hotbar {
   };
 }
 
-function seedStarterInventory(simulation: Simulation): void {
+export function seedStarterInventory(simulation: Simulation): void {
   simulation.inventory = addItem(simulation.inventory, BlockId.WOOD, 2).inventory;
   simulation.inventory = addItem(simulation.inventory, BlockId.DIRT, 6).inventory;
   simulation.inventory = selectHotbarSlot(simulation.inventory, 0);
