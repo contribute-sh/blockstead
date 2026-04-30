@@ -65,6 +65,34 @@ describe("save codec", () => {
     });
   });
 
+  it("returns the typed invalid_json failure for unparseable save data", () => {
+    expect(deserializeSave("{not json")).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_json",
+        message: "Save data is not valid JSON."
+      }
+    });
+  });
+
+  it("returns the typed version_mismatch failure for unsupported save versions", () => {
+    const actualVersion = SAVE_VERSION + 2;
+    const payload = {
+      ...baseState,
+      version: actualVersion
+    };
+
+    expect(deserializeSave(JSON.stringify(payload))).toEqual({
+      ok: false,
+      error: {
+        kind: "version_mismatch",
+        message: `Unsupported save version ${actualVersion}; expected ${SAVE_VERSION}.`,
+        expected: SAVE_VERSION,
+        actual: actualVersion
+      }
+    });
+  });
+
   it("returns invalid_shape for missing or wrong-typed fields", () => {
     expect(deserializeSave(JSON.stringify({ ...baseState, seed: "12345" }))).toMatchObject({
       ok: false,
@@ -87,6 +115,53 @@ describe("save codec", () => {
       ok: false,
       error: { kind: "invalid_shape" }
     });
+  });
+
+  it("returns invalid_shape when required top-level fields are missing", () => {
+    const requiredFields = ["seed", "mutations", "player", "inventory", "hotbar"] as const;
+
+    for (const field of requiredFields) {
+      const payload: Partial<SaveState> = { ...baseState };
+
+      delete payload[field];
+
+      expect(deserializeSave(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: {
+          kind: "invalid_shape",
+          message: "Save data does not match the expected save schema."
+        }
+      });
+    }
+  });
+
+  it("returns invalid_shape for wrong nested save types", () => {
+    const malformedPayloads: Array<Record<string, unknown>> = [
+      { ...baseState, mutations: "not-an-array" },
+      {
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [1, 2]
+        }
+      },
+      {
+        ...baseState,
+        inventory: {
+          slots: [{ block: BlockId.DIRT, count: "negative-one" }]
+        }
+      }
+    ];
+
+    for (const payload of malformedPayloads) {
+      expect(deserializeSave(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: {
+          kind: "invalid_shape",
+          message: "Save data does not match the expected save schema."
+        }
+      });
+    }
   });
 
   it("keeps sparse mutation payloads sparse", () => {

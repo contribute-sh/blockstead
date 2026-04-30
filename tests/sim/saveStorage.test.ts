@@ -91,6 +91,31 @@ describe("save storage", () => {
     expect(loadFromStorage("bad-shape", storage)).toEqual({ ok: false, error: "malformed" });
   });
 
+  it("returns malformed when stored save JSON is not parseable", () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem("save", "{not json");
+
+    expect(loadFromStorage("save", storage)).toEqual({ ok: false, error: "malformed" });
+  });
+
+  it("returns malformed when stored save JSON has an invalid schema", () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem(
+      "save",
+      JSON.stringify({
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [1, 2]
+        }
+      })
+    );
+
+    expect(loadFromStorage("save", storage)).toEqual({ ok: false, error: "malformed" });
+  });
+
   it("returns quota_exceeded when storage quota is exceeded", () => {
     const storage = new MemoryStorage();
 
@@ -100,5 +125,27 @@ describe("save storage", () => {
       ok: false,
       error: "quota_exceeded"
     });
+  });
+
+  it("returns quota_exceeded when setItem throws a quota DOMException", () => {
+    const storage = new MemoryStorage();
+
+    storage.setError = new DOMException("Storage quota exceeded.", "QuotaExceededError");
+
+    expect(saveToStorage("save", baseState, storage)).toEqual({
+      ok: false,
+      error: "quota_exceeded"
+    });
+  });
+
+  it("throws when called without a storage object", () => {
+    const missingStorageValues = [undefined, null] as const;
+
+    for (const storage of missingStorageValues) {
+      expect(() => loadFromStorage("save", storage as unknown as Storage)).toThrow(TypeError);
+      expect(() => saveToStorage("save", baseState, storage as unknown as Storage)).toThrow(
+        TypeError
+      );
+    }
   });
 });
