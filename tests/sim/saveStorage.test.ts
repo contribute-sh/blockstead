@@ -81,13 +81,19 @@ describe("save storage", () => {
     expect(loadFromStorage("missing", storage)).toEqual({ ok: false, error: "missing" });
   });
 
-  it("returns malformed for invalid JSON or invalid save shape", () => {
+  it("returns malformed for invalid JSON", () => {
     const storage = new MemoryStorage();
 
     storage.setItem("bad-json", "{not json");
-    storage.setItem("bad-shape", JSON.stringify({ version: SAVE_VERSION }));
 
     expect(loadFromStorage("bad-json", storage)).toEqual({ ok: false, error: "malformed" });
+  });
+
+  it("returns malformed for invalid save shape", () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem("bad-shape", JSON.stringify({ version: SAVE_VERSION }));
+
     expect(loadFromStorage("bad-shape", storage)).toEqual({ ok: false, error: "malformed" });
   });
 
@@ -95,6 +101,17 @@ describe("save storage", () => {
     const storage = new MemoryStorage();
 
     storage.setError = { name: "QuotaExceededError" };
+
+    expect(saveToStorage("save", baseState, storage)).toEqual({
+      ok: false,
+      error: "quota_exceeded"
+    });
+  });
+
+  it("recognizes DOMException quota failures", () => {
+    const storage = new MemoryStorage();
+
+    storage.setError = new DOMException("Quota exceeded", "QuotaExceededError");
 
     expect(saveToStorage("save", baseState, storage)).toEqual({
       ok: false,
