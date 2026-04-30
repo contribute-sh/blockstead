@@ -2,6 +2,7 @@ import { createCoordinatesLabel, type CoordinatesLabel } from "../hud/coordinate
 import { createCraftingPanel, type CraftingPanel } from "../hud/craftingPanel";
 import { createHotbarElement, updateHotbarElement } from "../hud/hotbar";
 import { createInventoryPanel, type InventoryPanel } from "../hud/inventoryPanel";
+import { createPointerLockHint, type PointerLockHint } from "../hud/pointerLockHint";
 import { createSaveStatus, type SaveStatusIndicator } from "../hud/saveStatus";
 import type { Hotbar } from "../sim/hotbar";
 import type { Simulation } from "../sim/simulation";
@@ -14,6 +15,7 @@ export interface HudElements {
   readonly craftingPanel: CraftingPanel;
   readonly saveStatus: SaveStatusIndicator;
   readonly worldStatus: HTMLElement;
+  readonly pointerLockHint: PointerLockHint;
 }
 
 export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
@@ -23,6 +25,7 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
   const craftingPanel = createCraftingPanel();
   const saveStatus = createSaveStatus();
   const worldStatus = document.createElement("div");
+  const pointerLockHint = createPointerLockHint();
   const hotbarElement = createHotbarElement({
     hotbar,
     inventory: simulation.inventory
@@ -72,6 +75,10 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
   worldStatus.style.left = "16px";
   worldStatus.style.top = "80px";
 
+  pointerLockHint.element.style.position = "absolute";
+  pointerLockHint.element.style.left = "16px";
+  pointerLockHint.element.style.bottom = "24px";
+
   hotbarElement.style.position = "absolute";
   hotbarElement.style.left = "50%";
   hotbarElement.style.bottom = "24px";
@@ -86,6 +93,7 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
     craftingPanel.element,
     saveStatus.element,
     worldStatus,
+    pointerLockHint.element,
     hotbarElement
   );
   updateHud(
@@ -96,7 +104,8 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
       inventoryPanel,
       craftingPanel,
       saveStatus,
-      worldStatus
+      worldStatus,
+      pointerLockHint
     },
     simulation,
     hotbar
@@ -109,7 +118,8 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
     inventoryPanel,
     craftingPanel,
     saveStatus,
-    worldStatus
+    worldStatus,
+    pointerLockHint
   };
 }
 

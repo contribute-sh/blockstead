@@ -1,15 +1,25 @@
 import {
+  lookIntent,
   mineIntent,
   moveIntent,
   placeIntent,
   selectHotbarIntent,
   type ActionIntent,
   type IntentAxis,
-  type IntentFrame
+  type IntentFrame,
+  type LookIntent
 } from "../input/intents";
+import {
+  createPointerLock,
+  type PointerLockAdapter,
+  type PointerLockDocument
+} from "../input/pointerLock";
 
 export interface InputController {
   readonly pressedKeys: ReadonlySet<string>;
+  isPointerLockSupported(): boolean;
+  isPointerLocked(): boolean;
+  drainLook(): LookIntent | null;
   drainActions(): ReadonlyArray<ActionIntent>;
   dispose(): void;
 }
@@ -19,13 +29,32 @@ export interface InputActions {
   onSave(): void;
 }
 
+export interface InputControllerOptions {
+  readonly pointerLock?: PointerLockAdapter | null;
+}
+
 export function createInputController(
   canvas: HTMLCanvasElement,
-  actions: InputActions
+  actions: InputActions,
+  options: InputControllerOptions = {}
 ): InputController {
   const pressedKeys = new Set<string>();
   const pendingActions: ActionIntent[] = [];
   const view = canvas.ownerDocument.defaultView;
+  const pointerLock =
+    options.pointerLock === undefined
+      ? createCanvasPointerLock(canvas)
+      : options.pointerLock;
+  let hasPendingLook = false;
+  let pendingLookX = 0;
+  let pendingLookY = 0;
+
+  const unsubscribePointerLock =
+    pointerLock?.on((event) => {
+      pendingLookX += event.movementX;
+      pendingLookY += event.movementY;
+      hasPendingLook = true;
+    }) ?? (() => undefined);
 
   function handleKeyDown(event: KeyboardEvent): void {
     pressedKeys.add(event.code);
@@ -86,6 +115,23 @@ export function createInputController(
 
   return {
     pressedKeys,
+    isPointerLockSupported() {
+      return pointerLock !== null;
+    },
+    isPointerLocked() {
+      return pointerLock?.isLocked() ?? false;
+    },
+    drainLook() {
+      if (!hasPendingLook) {
+        return null;
+      }
+
+      const look = lookIntent(pendingLookX, pendingLookY);
+      pendingLookX = 0;
+      pendingLookY = 0;
+      hasPendingLook = false;
+      return look;
+    },
     drainActions() {
       const drained = [...pendingActions];
       pendingActions.length = 0;
@@ -96,6 +142,8 @@ export function createInputController(
       canvas.removeEventListener("contextmenu", handleContextMenu);
       view?.removeEventListener("keydown", handleKeyDown);
       view?.removeEventListener("keyup", handleKeyUp);
+      unsubscribePointerLock();
+      pointerLock?.dispose();
     }
   };
 }
@@ -105,7 +153,7 @@ export function nextFrameIntents(input: InputController): IntentFrame {
 
   return {
     move,
-    look: null,
+    look: input.drainLook(),
     actions: input.drainActions()
   };
 }
@@ -145,4 +193,29 @@ function readHotbarSlot(event: KeyboardEvent): number | null {
   }
 
   return null;
+}
+
+function createCanvasPointerLock(canvas: HTMLCanvasElement): PointerLockAdapter | null {
+  if (
+    typeof canvas.requestPointerLock !== "function" ||
+    !isPointerLockDocument(canvas.ownerDocument)
+  ) {
+    return null;
+  }
+
+  return createPointerLock(canvas);
+}
+
+function isPointerLockDocument(value: unknown): value is PointerLockDocument {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  return (
+    "pointerLockElement" in value &&
+    "addEventListener" in value &&
+    typeof value.addEventListener === "function" &&
+    "removeEventListener" in value &&
+    typeof value.removeEventListener === "function"
+  );
 }

@@ -94,6 +94,7 @@ export function createApp(options: CreateAppOptions = {}): App {
   worldRenderer.sync();
   updateCamera(camera, simulation);
   updateHud(hud, simulation, selectedHotbar(hotbar, simulation));
+  updatePointerLockHint(hud, input);
 
   return {
     element,
@@ -139,6 +140,14 @@ function stepApp(
   worldRenderer.sync();
   updateCamera(camera, simulation);
   updateHud(hud, simulation, selectedHotbar(hotbar, simulation));
+  updatePointerLockHint(hud, input);
+}
+
+function updatePointerLockHint(hud: HudElements, input: InputController): void {
+  hud.pointerLockHint.update({
+    supported: input.isPointerLockSupported(),
+    locked: input.isPointerLocked()
+  });
 }
 
 function updateCamera(camera: THREE.PerspectiveCamera, simulation: Simulation): void {
