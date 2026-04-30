@@ -11,10 +11,11 @@ import { getLocalStorage, restoreSavedGame, saveGame } from "./app/persistence";
 import { applyPlayerPose, createPlayerCamera } from "./render/camera";
 import { createScene } from "./render/scene";
 import { createWorldRenderer, type WorldRenderer } from "./render/worldRenderer";
-import { BlockId, getBlockDefinition } from "./sim/blocks";
+import { BlockId } from "./sim/blocks";
 import { resolveCraft } from "./sim/craftAction";
 import { createHotbar, type Hotbar } from "./sim/hotbar";
 import { addItem, selectHotbarSlot } from "./sim/inventory";
+import { getItemOrBlockName } from "./sim/items";
 import { createSimulation, type Simulation } from "./sim/simulation";
 
 export interface AppRenderer {
@@ -82,7 +83,7 @@ export function createApp(options: CreateAppOptions = {}): App {
 
     if (result.ok) {
       simulation.inventory = selectHotbarSlot(result.inventory, simulation.selectedHotbarSlot);
-      hud.worldStatus.textContent = `Crafted ${getBlockDefinition(result.output.item).name}`;
+      hud.worldStatus.textContent = `Crafted ${getItemOrBlockName(result.output.item)}`;
     } else {
       hud.worldStatus.textContent = "Missing recipe inputs";
     }

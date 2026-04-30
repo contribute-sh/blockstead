@@ -155,4 +155,21 @@ describe("createApp persistence branch", () => {
     expect(app.simulation.inventory.selectedHotbarSlot).toBe(0);
     expect(app.simulation.selectedHotbarSlot).toBe(0);
   });
+
+  it("shows the crafted output name when crafting sticks", () => {
+    const storage = new MemoryStorage();
+    const saved = createSavedState();
+
+    saved.inventory.slots.fill(null);
+    saved.inventory.slots[0] = { block: BlockId.PLANKS, count: 2 };
+    storage.setItem(SAVE_KEY, serializeSave(saved));
+
+    const app = createTrackedApp(storage);
+    const sticksRecipe = getByTestId(app.element, "craft-recipe-sticks");
+    const worldStatus = getByTestId(app.element, "hud-world-status");
+
+    sticksRecipe.click();
+
+    expect(worldStatus.textContent).toBe("Crafted Stick");
+  });
 });
