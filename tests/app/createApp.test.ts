@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp, type App, type AppRenderer } from "../../src/app";
 import { BlockId } from "../../src/sim/blocks";
-import type { Inventory } from "../../src/sim/inventory";
+import { addItem, type Inventory } from "../../src/sim/inventory";
+import { getItemOrBlockName, ItemId } from "../../src/sim/items";
 import { SAVE_VERSION, serializeSave, type SaveState } from "../../src/sim/save";
 
 const SAVE_KEY = "blockstead:mvp-save";
@@ -154,5 +155,18 @@ describe("createApp persistence branch", () => {
     ]);
     expect(app.simulation.inventory.selectedHotbarSlot).toBe(0);
     expect(app.simulation.selectedHotbarSlot).toBe(0);
+  });
+
+  it("shows the crafted stick name in the HUD after crafting", () => {
+    const app = createTrackedApp(new MemoryStorage());
+
+    app.simulation.inventory = addItem(app.simulation.inventory, BlockId.PLANKS, 2).inventory;
+
+    expect(getItemOrBlockName(ItemId.STICK)).toBe("Stick");
+
+    getByTestId(app.element, "craft-recipe-sticks").click();
+
+    expect(getByTestId(app.element, "hud-world-status").textContent).toContain("Crafted Stick");
+    expect(countItem(app.simulation.inventory, BlockId.STICK)).toBe(4);
   });
 });
