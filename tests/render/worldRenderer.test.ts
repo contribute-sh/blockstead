@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createWorldRenderer } from "../../src/render/worldRenderer";
 import { BlockId } from "../../src/sim/blocks";
 import { CHUNK_SIZE } from "../../src/sim/chunk";
+import { createSimulation } from "../../src/sim/simulation";
 import { createWorld, setBlock, type ChunkKey, type World } from "../../src/sim/world";
 
 describe("createWorldRenderer", () => {
@@ -52,6 +53,38 @@ describe("createWorldRenderer", () => {
     expect(dirtyGeometryDispose).toHaveBeenCalledTimes(1);
     expect(getMeshForChunk(scene, stableKey)).toBe(stableMesh);
     expect(stableMesh.geometry).toBe(stableGeometry);
+
+    renderer.dispose();
+  });
+
+  it("preserves unaffected simulation chunk mesh geometry after a dirty sync", () => {
+    const scene = new THREE.Scene();
+    const simulation = createSimulation({ seed: 1337 });
+    const renderer = createWorldRenderer(scene, simulation.world);
+
+    const dirtyKey: ChunkKey = "0,0,0";
+    const stableKey: ChunkKey = "1,0,0";
+
+    setBlock(simulation.world, 2, 2, 3, BlockId.STONE);
+    setBlock(simulation.world, CHUNK_SIZE + 1, 2, 3, BlockId.DIRT);
+    renderer.sync();
+
+    const dirtyMesh = getMeshForChunk(scene, dirtyKey);
+    const stableMesh = getMeshForChunk(scene, stableKey);
+    const dirtyGeometry = dirtyMesh.geometry;
+    const stableGeometry = stableMesh.geometry;
+    const dirtyGeometryDispose = vi.spyOn(dirtyGeometry, "dispose");
+    const stableGeometryDispose = vi.spyOn(stableGeometry, "dispose");
+
+    setBlock(simulation.world, 2, 2, 3, BlockId.DIRT);
+    renderer.sync();
+
+    expect(getMeshForChunk(scene, dirtyKey)).toBe(dirtyMesh);
+    expect(dirtyMesh.geometry).not.toBe(dirtyGeometry);
+    expect(dirtyGeometryDispose).toHaveBeenCalledTimes(1);
+    expect(getMeshForChunk(scene, stableKey)).toBe(stableMesh);
+    expect(stableMesh.geometry).toBe(stableGeometry);
+    expect(stableGeometryDispose).not.toHaveBeenCalled();
 
     renderer.dispose();
   });
