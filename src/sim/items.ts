@@ -1,4 +1,4 @@
-import { BlockId } from "./blocks";
+import { BLOCK_REGISTRY, BlockId, getBlockDefinition } from "./blocks";
 
 export const ItemId = {
   WOOD_LOG: 100,
@@ -48,6 +48,10 @@ export const ITEM_REGISTRY = {
   }
 } as const satisfies Readonly<Record<ItemId, ItemDef>>;
 
+function hasOwn<T extends object>(object: T, key: PropertyKey): key is keyof T {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 export function getItemDefinition(id: ItemId): ItemDef {
   const definition = ITEM_REGISTRY[id];
 
@@ -56,4 +60,16 @@ export function getItemDefinition(id: ItemId): ItemDef {
   }
 
   return definition;
+}
+
+export function getItemOrBlockName(id: number): string {
+  if (hasOwn(ITEM_REGISTRY, id)) {
+    return ITEM_REGISTRY[id].name;
+  }
+
+  if (hasOwn(BLOCK_REGISTRY, id)) {
+    return getBlockDefinition(id).name;
+  }
+
+  throw new Error(`Unknown item or block id: ${id}`);
 }
