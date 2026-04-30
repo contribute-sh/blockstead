@@ -6,11 +6,16 @@ import {
   type InputActions
 } from "../../src/app/inputController";
 import {
+  lookIntent,
   mineIntent,
   moveIntent,
   placeIntent,
   selectHotbarIntent
 } from "../../src/input/intents";
+import type {
+  PointerLockAdapter,
+  PointerLockLookDeltaHandler
+} from "../../src/input/pointerLock";
 
 class FakeEventSource {
   private readonly listeners = new Map<string, Set<EventListener>>();
@@ -54,6 +59,38 @@ class FakeCanvas extends FakeEventSource {
   }
 }
 
+class FakePointerLockAdapter implements PointerLockAdapter {
+  disposed = false;
+  locked = false;
+  private readonly lookHandlers = new Set<PointerLockLookDeltaHandler>();
+
+  isLocked(): boolean {
+    return this.locked;
+  }
+
+  emitLookDelta(movementX: number, movementY: number): void {
+    for (const handler of this.lookHandlers) {
+      handler({ type: "look-delta", movementX, movementY });
+    }
+  }
+
+  on(handler: PointerLockLookDeltaHandler): () => void {
+    this.lookHandlers.add(handler);
+    return () => {
+      this.lookHandlers.delete(handler);
+    };
+  }
+
+  off(handler: PointerLockLookDeltaHandler): void {
+    this.lookHandlers.delete(handler);
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.lookHandlers.clear();
+  }
+}
+
 interface KeyboardEventInitLike {
   readonly code: string;
   readonly key: string;
@@ -77,7 +114,7 @@ function syntheticMouseEvent(type: "mousedown" | "contextmenu", button = 0): Mou
   return event;
 }
 
-function createSubject(): {
+function createSubject(pointerLock?: PointerLockAdapter | null): {
   readonly actions: InputActions;
   readonly canvas: FakeCanvas;
   readonly input: ReturnType<typeof createInputController>;
@@ -89,7 +126,9 @@ function createSubject(): {
     onToggleCrafting: vi.fn(),
     onSave: vi.fn()
   };
-  const input = createInputController(canvas.asHtmlCanvasElement(), actions);
+  const input = createInputController(canvas.asHtmlCanvasElement(), actions, {
+    pointerLock
+  });
 
   return { actions, canvas, input, view };
 }
@@ -138,6 +177,32 @@ describe("input controller", () => {
       actions: [mineIntent(), placeIntent()]
     });
     expect(nextFrameIntents(input).actions).toEqual([]);
+  });
+
+  it("drains pointer lock look deltas without blocking movement or mouse actions", () => {
+    const pointerLock = new FakePointerLockAdapter();
+    const { canvas, input, view } = createSubject(pointerLock);
+    const mineEvent = syntheticMouseEvent("mousedown", 0);
+
+    expect(input.isPointerLockSupported()).toBe(true);
+    expect(input.isPointerLocked()).toBe(false);
+
+    view.dispatch("keydown", syntheticKeyboardEvent("keydown", { code: "KeyW", key: "w" }));
+    pointerLock.locked = true;
+    pointerLock.emitLookDelta(4, -3);
+    canvas.dispatch("mousedown", mineEvent);
+
+    expect(input.isPointerLocked()).toBe(true);
+    expect(nextFrameIntents(input)).toEqual({
+      move: moveIntent(1, 0, 0, false),
+      look: lookIntent(4, -3),
+      actions: [mineIntent()]
+    });
+    expect(nextFrameIntents(input).look).toBeNull();
+
+    input.dispose();
+
+    expect(pointerLock.disposed).toBe(true);
   });
 
   it("creates hotbar selection actions from digit codes and digit keys", () => {
@@ -220,6 +285,13 @@ describe("input controller", () => {
     });
   });
 
+  it("reports unsupported pointer lock when no adapter is available", () => {
+    const { input } = createSubject(null);
+
+    expect(input.isPointerLockSupported()).toBe(false);
+    expect(input.isPointerLocked()).toBe(false);
+  });
+
   it("removes every listener on dispose and ignores later events", () => {
     const { actions, canvas, input, view } = createSubject();
 
@@ -255,4 +327,5 @@ describe("input controller", () => {
       actions: []
     });
   });
+
 });

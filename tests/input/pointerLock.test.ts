@@ -113,7 +113,7 @@ describe("pointer lock adapter", () => {
   it("requests pointer lock when the target is clicked", () => {
     const target = new FakePointerLockTarget();
     const pointerLockDocument = new FakePointerLockDocument();
-    const adapter = createPointerLock(target, { document: pointerLockDocument });
+    const adapter = createPointerLock(target, pointerLockDocument);
 
     target.dispatch("click", new Event("click"));
 
