@@ -43,6 +43,32 @@ pnpm build
 - `E`: toggle inventory intent
 - `P`: save intent
 
+Reference table:
+
+| Action | Key/Button | Notes |
+| --- | --- | --- |
+| Move forward | `KeyW` (`W`) or `ArrowUp` | From `DEFAULT_BINDINGS`; part of WASD and arrow-key movement. |
+| Move backward | `KeyS` (`S`) or `ArrowDown` | From `DEFAULT_BINDINGS`; part of WASD and arrow-key movement. |
+| Move left | `KeyA` (`A`) or `ArrowLeft` | From `DEFAULT_BINDINGS`; part of WASD and arrow-key movement. |
+| Move right | `KeyD` (`D`) or `ArrowRight` | From `DEFAULT_BINDINGS`; part of WASD and arrow-key movement. |
+| Jump | `Space` | Emits jump through the movement intent. |
+| Toggle inventory | `KeyE` (`E`) | Bound to the inventory/crafting toggle intent. |
+| Save | `KeyP` (`P`) | Source binds `KeyP`; `Ctrl+S` is not currently bound. |
+| Select hotbar slot | `Digit1` through `Digit9` | Selects hotbar slots 1-9; modified and repeated digit presses are ignored by the hotbar adapter. |
+| Mine | Left mouse button (`button === 0`) | Mouse button events emit mine intent. |
+| Place | Right mouse button (`button === 2`) | Mouse button events emit place intent. |
+| Lock pointer | Click the canvas/target | The pointer-lock adapter requests pointer lock on click. |
+| Look | Mouse movement | Mouse movement emits look intent; pointer-lock look deltas are emitted only while locked. |
+
+## MVP Limitations
+
+- New games default to deterministic seed `1337`.
+- Saves use a single `localStorage` slot (`blockstead:mvp-save`); there is no save management UI, and saving overwrites the current slot.
+- There is no day/night cycle.
+- There is no audio.
+- Terrain is currently a single biome.
+- Browser focus loss is a known input edge case: if the window loses focus while keys are held, input state may not be released cleanly.
+
 ## Current Scope
 
 The repository contains the core TypeScript/Vite project structure plus tested simulation, rendering, input, HUD, inventory, crafting, save/load, terrain, and world modules.
