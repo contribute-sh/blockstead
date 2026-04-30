@@ -82,6 +82,22 @@ function makeSaveState(overrides: Partial<SaveState> = {}): SaveState {
 }
 
 describe("app persistence", () => {
+  it("treats unavailable localStorage as no saved game", () => {
+    const simulation = createSimulation({ seed: 1337 });
+
+    expect(restoreSavedGame(simulation, null)).toBe(false);
+  });
+
+  it("reports an error status when saving without localStorage", () => {
+    const simulation = createSimulation({ seed: 1337 });
+    const status = createSaveStatus();
+
+    expect(() => saveGame(simulation, null, status)).not.toThrow();
+    expect(status.states).toEqual([
+      { state: "error", detail: "localStorage unavailable" }
+    ]);
+  });
+
   it("restores saved world mutations into generated terrain", () => {
     const storage = new MemoryStorage();
     const saved = makeSaveState();

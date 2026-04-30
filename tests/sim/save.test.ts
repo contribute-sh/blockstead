@@ -52,7 +52,11 @@ describe("save codec", () => {
     expect(result.ok).toBe(false);
     expect(result).toMatchObject({
       ok: false,
-      error: { kind: "version_mismatch" }
+      error: {
+        kind: "version_mismatch",
+        expected: SAVE_VERSION,
+        actual: SAVE_VERSION + 1
+      }
     });
   });
 
@@ -87,6 +91,38 @@ describe("save codec", () => {
       ok: false,
       error: { kind: "invalid_shape" }
     });
+  });
+
+  it("returns invalid_shape for invalid nested payloads", () => {
+    const cases: unknown[] = [
+      { ...baseState, mutations: "not-an-array" },
+      {
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [1, 2]
+        }
+      },
+      {
+        ...baseState,
+        inventory: {
+          slots: [{ block: BlockId.DIRT, count: "many" }]
+        }
+      },
+      {
+        ...baseState,
+        hotbar: {
+          selected: "first"
+        }
+      }
+    ];
+
+    for (const payload of cases) {
+      expect(deserializeSave(JSON.stringify(payload))).toMatchObject({
+        ok: false,
+        error: { kind: "invalid_shape" }
+      });
+    }
   });
 
   it("keeps sparse mutation payloads sparse", () => {
