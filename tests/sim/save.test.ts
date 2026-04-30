@@ -65,6 +65,30 @@ describe("save codec", () => {
     });
   });
 
+  it("returns the typed invalid_json failure for unparseable save data", () => {
+    expect(deserializeSave("{")).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_json",
+        message: "Save data is not valid JSON."
+      }
+    });
+  });
+
+  it("returns typed version mismatch details", () => {
+    const actual = SAVE_VERSION + 2;
+
+    expect(deserializeSave(JSON.stringify({ ...baseState, version: actual }))).toEqual({
+      ok: false,
+      error: {
+        kind: "version_mismatch",
+        message: `Unsupported save version ${actual}; expected ${SAVE_VERSION}.`,
+        expected: SAVE_VERSION,
+        actual
+      }
+    });
+  });
+
   it("returns invalid_shape for missing or wrong-typed fields", () => {
     expect(deserializeSave(JSON.stringify({ ...baseState, seed: "12345" }))).toMatchObject({
       ok: false,
@@ -87,6 +111,74 @@ describe("save codec", () => {
       ok: false,
       error: { kind: "invalid_shape" }
     });
+  });
+
+  it("returns typed invalid_shape failures for missing required top-level fields", () => {
+    const requiredFields = ["seed", "mutations", "player", "inventory", "hotbar"] as const;
+
+    for (const field of requiredFields) {
+      const payload: Record<string, unknown> = { ...baseState };
+      delete payload[field];
+
+      expect(deserializeSave(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: {
+          kind: "invalid_shape",
+          message: "Save data does not match the expected save schema."
+        }
+      });
+    }
+  });
+
+  it("returns typed invalid_shape failures for wrong nested save shapes", () => {
+    const invalidPayloads: Array<Record<string, unknown>> = [
+      { ...baseState, mutations: { 0: baseState.mutations[0] } },
+      {
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [baseState.player.position[0], baseState.player.position[1]]
+        }
+      },
+      {
+        ...baseState,
+        player: {
+          ...baseState.player,
+          position: [
+            baseState.player.position[0],
+            "12",
+            baseState.player.position[2]
+          ]
+        }
+      },
+      {
+        ...baseState,
+        inventory: {
+          slots: [{ block: BlockId.DIRT, count: "3" }]
+        }
+      }
+    ];
+
+    for (const payload of invalidPayloads) {
+      expect(deserializeSave(JSON.stringify(payload))).toEqual({
+        ok: false,
+        error: {
+          kind: "invalid_shape",
+          message: "Save data does not match the expected save schema."
+        }
+      });
+    }
+  });
+
+  it("preserves finite negative inventory counts under the current numeric schema", () => {
+    const payload: SaveState = {
+      ...baseState,
+      inventory: {
+        slots: [{ block: BlockId.STONE, count: -1 }]
+      }
+    };
+
+    expect(deserializeSave(JSON.stringify(payload))).toEqual({ ok: true, state: payload });
   });
 
   it("keeps sparse mutation payloads sparse", () => {
