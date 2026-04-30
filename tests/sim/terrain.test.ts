@@ -5,6 +5,7 @@ import { CHUNK_SIZE, getBlock, type Chunk } from "../../src/sim/chunk";
 import { generateChunk } from "../../src/sim/terrain";
 
 const DIRT_DEPTH = 3;
+const STONE_LAYER_BLOCKS = [BlockId.STONE, BlockId.COAL_ORE] as const;
 
 describe("terrain generator", () => {
   it("creates byte-equal chunks for the same seed and coordinate", () => {
@@ -33,7 +34,7 @@ describe("terrain generator", () => {
         }
 
         for (let y = 0; y < topY - DIRT_DEPTH; y += 1) {
-          expect(getBlock(chunk, x, y, z)).toBe(BlockId.STONE);
+          expect(STONE_LAYER_BLOCKS).toContain(getBlock(chunk, x, y, z));
         }
       }
     }

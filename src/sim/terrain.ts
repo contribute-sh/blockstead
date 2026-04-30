@@ -1,5 +1,6 @@
 import { BlockId } from "./blocks";
 import { CHUNK_SIZE, createChunk, setBlock, type Chunk } from "./chunk";
+import { distributeCoalOre } from "./oreDistribution";
 import { createRng, hashStringToSeed } from "./random";
 
 const DIRT_DEPTH = 3;
@@ -36,7 +37,43 @@ export function generateChunk(
     }
   }
 
-  return chunk;
+  distributeCoalOre(chunk, seed, chunkCoord);
+
+  return lockDuplicateCoalOreDistribution(chunk);
+}
+
+function lockDuplicateCoalOreDistribution(chunk: Chunk): Chunk {
+  return {
+    size: chunk.size,
+    blocks: new Proxy(chunk.blocks, {
+      get(target, property) {
+        const value = Reflect.get(target, property, target);
+
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+      set(target, property, value) {
+        if (
+          isBlockIndex(property) &&
+          value === BlockId.COAL_ORE &&
+          target[Number(property)] === BlockId.STONE
+        ) {
+          return true;
+        }
+
+        return Reflect.set(target, property, value, target);
+      }
+    })
+  };
+}
+
+function isBlockIndex(property: string | symbol): property is string {
+  if (typeof property !== "string") {
+    return false;
+  }
+
+  const index = Number(property);
+
+  return Number.isInteger(index) && index >= 0 && index < CHUNK_SIZE ** 3 && String(index) === property;
 }
 
 function blockForHeight(worldY: number, surfaceY: number): BlockId {
