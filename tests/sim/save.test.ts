@@ -65,6 +65,92 @@ describe("save codec", () => {
     });
   });
 
+  it("returns the typed invalid_json failure for unparseable JSON", () => {
+    expect(deserializeSave("{\"version\":")).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid_json",
+        message: "Save data is not valid JSON."
+      }
+    });
+  });
+
+  it("returns invalid_shape when required top-level fields are missing", () => {
+    const expected = {
+      ok: false,
+      error: {
+        kind: "invalid_shape",
+        message: "Save data does not match the expected save schema."
+      }
+    };
+    const payloads = [
+      { label: "seed", payload: { ...baseState, seed: undefined } },
+      { label: "mutations", payload: { ...baseState, mutations: undefined } },
+      { label: "player", payload: { ...baseState, player: undefined } },
+      { label: "inventory", payload: { ...baseState, inventory: undefined } },
+      { label: "hotbar", payload: { ...baseState, hotbar: undefined } }
+    ];
+
+    for (const { label, payload } of payloads) {
+      expect(deserializeSave(JSON.stringify(payload)), label).toEqual(expected);
+    }
+  });
+
+  it("returns invalid_shape when nested save fields have the wrong type", () => {
+    const expected = {
+      ok: false,
+      error: {
+        kind: "invalid_shape",
+        message: "Save data does not match the expected save schema."
+      }
+    };
+    const payloads = [
+      {
+        label: "mutations",
+        payload: { ...baseState, mutations: { x: 1, y: 2, z: 3, block: BlockId.DIRT } }
+      },
+      {
+        label: "player.position length",
+        payload: {
+          ...baseState,
+          player: { ...baseState.player, position: [1, 2] }
+        }
+      },
+      {
+        label: "player.position number",
+        payload: {
+          ...baseState,
+          player: { ...baseState.player, position: [1, "2", 3] }
+        }
+      },
+      {
+        label: "inventory slot count",
+        payload: {
+          ...baseState,
+          inventory: {
+            slots: [{ block: BlockId.DIRT, count: "3" }]
+          }
+        }
+      }
+    ];
+
+    for (const { label, payload } of payloads) {
+      expect(deserializeSave(JSON.stringify(payload)), label).toEqual(expected);
+    }
+  });
+
+  it("returns the typed version_mismatch failure for unsupported save versions", () => {
+    expect(deserializeSave(JSON.stringify({ ...baseState, version: SAVE_VERSION + 1 }))).toEqual({
+      ok: false,
+      error: {
+        kind: "version_mismatch",
+        message: `Unsupported save version ${SAVE_VERSION + 1}; expected ${SAVE_VERSION}.`,
+        expected: SAVE_VERSION,
+        actual: SAVE_VERSION + 1
+      }
+    });
+  });
+
   it("returns invalid_shape for missing or wrong-typed fields", () => {
     expect(deserializeSave(JSON.stringify({ ...baseState, seed: "12345" }))).toMatchObject({
       ok: false,
