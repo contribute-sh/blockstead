@@ -1,5 +1,11 @@
 import { createApp } from "./app";
 
+export const MAX_FRAME_DT = 1 / 30;
+
+export function clampFrameDt(dt: number): number {
+  return Number.isFinite(dt) ? Math.min(Math.max(0, dt), MAX_FRAME_DT) : 0;
+}
+
 const mount = document.querySelector<HTMLElement>("#app");
 
 if (mount === null) {
@@ -22,7 +28,7 @@ function resize(): void {
 }
 
 function animate(frameTime: DOMHighResTimeStamp): void {
-  const dt = (frameTime - lastFrameTime) / 1000;
+  const dt = clampFrameDt((frameTime - lastFrameTime) / 1000);
   lastFrameTime = frameTime;
 
   app.step(dt);
