@@ -1,5 +1,6 @@
 import { BlockId } from "./blocks";
 import { CHUNK_SIZE, createChunk, setBlock, type Chunk } from "./chunk";
+import { distributeCoalOre } from "./oreDistribution";
 import { createRng, hashStringToSeed } from "./random";
 
 const DIRT_DEPTH = 3;
@@ -35,6 +36,8 @@ export function generateChunk(
       }
     }
   }
+
+  distributeCoalOre(chunk, seed, chunkCoord);
 
   return chunk;
 }

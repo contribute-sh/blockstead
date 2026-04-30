@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 
 import { BlockId } from "../../src/sim/blocks";
 import { CHUNK_SIZE, chunkIndex, type Chunk } from "../../src/sim/chunk";
-import { distributeCoalOre } from "../../src/sim/oreDistribution";
 import { generateChunk } from "../../src/sim/terrain";
 
 // If this test fails after intentional terrain changes, regenerate the fixture by running
@@ -94,11 +93,7 @@ function createFixture(): TerrainFixture {
 }
 
 function generateTerrainPipeline(seed: number, coord: ChunkCoord): Chunk {
-  const chunk = generateChunk(seed, coord);
-
-  distributeCoalOre(chunk, seed, coord);
-
-  return chunk;
+  return generateChunk(seed, coord);
 }
 
 function loadFixture(): TerrainFixture {
