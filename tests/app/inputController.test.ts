@@ -42,12 +42,15 @@ class FakeEventSource {
 }
 
 class FakeCanvas extends FakeEventSource {
-  readonly ownerDocument: { readonly defaultView: FakeEventSource | null };
+  readonly ownerDocument: {
+    readonly defaultView: FakeEventSource | null;
+    exitPointerLock: ReturnType<typeof vi.fn>;
+  };
   focusCalls = 0;
 
   constructor(defaultView: FakeEventSource | null = new FakeEventSource()) {
     super();
-    this.ownerDocument = { defaultView };
+    this.ownerDocument = { defaultView, exitPointerLock: vi.fn() };
   }
 
   focus(): void {
@@ -257,6 +260,19 @@ describe("input controller", () => {
     expect(craftingEvent.defaultPrevented).toBe(true);
     expect(saveEvent.defaultPrevented).toBe(true);
     expect(nextFrameIntents(input).actions).toEqual([]);
+  });
+
+  it("exits pointer lock before opening the crafting overlay", () => {
+    const pointerLock = new FakePointerLockAdapter();
+    const { actions, canvas, view } = createSubject(pointerLock);
+    const event = syntheticKeyboardEvent("keydown", { code: "KeyE", key: "e" });
+
+    pointerLock.locked = true;
+    view.dispatch("keydown", event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(canvas.ownerDocument.exitPointerLock).toHaveBeenCalledTimes(1);
+    expect(actions.onToggleCrafting).toHaveBeenCalledTimes(1);
   });
 
   it("prevents the canvas context menu while active", () => {

@@ -74,6 +74,7 @@ export function createInputController(
 
     if (event.code === "KeyE" || event.key.toLowerCase() === "e") {
       event.preventDefault();
+      releasePointerLock();
       actions.onToggleCrafting();
       return;
     }
@@ -82,6 +83,14 @@ export function createInputController(
       event.preventDefault();
       actions.onSave();
     }
+  }
+
+  function releasePointerLock(): void {
+    if (pointerLock?.isLocked() !== true) {
+      return;
+    }
+
+    canvas.ownerDocument.exitPointerLock();
   }
 
   function handleKeyUp(event: KeyboardEvent): void {

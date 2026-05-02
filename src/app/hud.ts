@@ -34,6 +34,7 @@ export function createHud(simulation: Simulation, hotbar: Hotbar): HudElements {
   root.dataset.testid = "hud-root";
   root.style.position = "absolute";
   root.style.inset = "0";
+  root.style.zIndex = "1";
   root.style.pointerEvents = "none";
   root.style.color = "#f8fafc";
   root.style.font = "14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";

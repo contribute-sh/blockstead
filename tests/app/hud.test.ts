@@ -51,6 +51,9 @@ describe("app HUD assembly", () => {
     expect(getByTestId(hud.root, "hud-inventory")).toBe(hud.inventoryPanel.element);
     expect(getByTestId(hud.root, "hud-crafting-panel")).toBe(hud.craftingPanel.element);
     expect(getByTestId(hud.root, "hud-world-status")).toBe(hud.worldStatus);
+    expect(hud.root.style.zIndex).toBe("1");
+    expect(hud.root.style.pointerEvents).toBe("none");
+    expect(hud.craftingPanel.element.style.pointerEvents).toBe("auto");
   });
 
   it("updates coordinates and the selected hotbar slot from new state", () => {
