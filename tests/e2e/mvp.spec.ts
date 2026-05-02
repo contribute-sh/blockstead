@@ -65,6 +65,10 @@ test("satisfies the constitution MVP gameplay loop", async ({ page }) => {
     })
     .not.toBe(initialCoordinates);
 
+  await page.reload();
+  await expect(page.locator("[data-testid='canvas-host']")).toBeVisible();
+  await expect(page.locator("[data-testid='hud-hotbar']")).toBeVisible();
+
   await page.mouse.click(400, 300, { button: "left" });
   await expect(page.locator("[data-testid='hud-world-status']")).toContainText(/mined/i);
 
